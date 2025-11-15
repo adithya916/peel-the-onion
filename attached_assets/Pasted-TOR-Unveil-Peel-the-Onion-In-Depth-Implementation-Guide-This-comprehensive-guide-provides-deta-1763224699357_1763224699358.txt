@@ -1,0 +1,1058 @@
+TOR - Unveil: Peel the Onion - In-Depth Implementation Guide
+This comprehensive guide provides detailed technical implementation steps for building the TN Police Hackathon 2025 project focused on TOR network deanonymization through traffic correlation and node analysis.​
+
+1. Executive Summary
+The "TOR - Unveil: Peel the Onion" project aims to develop a forensic analysis system capable of tracing TOR network users by correlating traffic patterns, identifying entry/exit nodes, and reconstructing connection paths. This system leverages automated data collection, traffic correlation algorithms, machine learning techniques, and visualization dashboards to support law enforcement investigations.​
+
+Key Components:
+
+Automated TOR network data collection
+
+Traffic correlation and timing analysis
+
+Entry/guard node identification
+
+Interactive visualization dashboard
+
+Forensic reporting capabilities
+
+2. System Architecture & Workflow
+2.1 High-Level Architecture
+text
+┌─────────────────────────────────────────────────────────┐
+│              Data Collection Layer                       │
+├─────────────────────────────────────────────────────────┤
+│  • TOR Metrics API (CollecTor)                          │
+│  • Live PCAP Capture (Wireshark/tcpdump)               │
+│  • Node Consensus Documents                             │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│           Processing & Analysis Layer                    │
+├─────────────────────────────────────────────────────────┤
+│  • Traffic Parsing (Scapy/PyShark)                      │
+│  • Timing Correlation (Statistical Analysis)            │
+│  • ML-based Flow Correlation (DeepCorr)                 │
+│  • Entry Node Identification                            │
+└────────────────┬────────────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────────────┐
+│        Visualization & Reporting Layer                   │
+├─────────────────────────────────────────────────────────┤
+│  • Flask/Django Web Dashboard                           │
+│  • Network Topology Visualization (D3.js/Plotly)        │
+│  • Confidence Scoring & Forensic Reports                │
+└─────────────────────────────────────────────────────────┘
+2.2 Detailed Workflow
+Phase 1: Data Collection → Phase 2: Traffic Analysis → Phase 3: Correlation → Phase 4: Visualization → Phase 5: Forensic Reporting
+
+3. Detailed Implementation Guide
+3.1 TOR Network Data Collection
+3.1.1 Collecting TOR Node Consensus Data
+TOR publishes consensus documents containing information about all active relays. Use the TOR Metrics API and CollecTor service to fetch this data.​
+
+Implementation with Python:
+
+python
+import requests
+import json
+from datetime import datetime, timedelta
+
+class TorNodeCollector:
+    def __init__(self):
+        self.collector_url = "https://collector.torproject.org"
+        self.metrics_url = "https://metrics.torproject.org"
+        
+    def fetch_consensus_document(self, date=None):
+        """
+        Fetch TOR consensus document from CollecTor
+        """
+        if date is None:
+            date = datetime.now().strftime('%Y-%m-%d')
+        
+        consensus_url = f"{self.collector_url}/recent/relay-descriptors/consensuses/"
+        response = requests.get(consensus_url)
+        
+        return response.content
+    
+    def parse_consensus(self, consensus_data):
+        """
+        Parse consensus to extract relay information
+        """
+        relays = []
+        for line in consensus_data.decode('utf-8').split('\n'):
+            if line.startswith('r '):
+                # Parse relay descriptor
+                parts = line.split()
+                relay_info = {
+                    'nickname': parts[1],
+                    'fingerprint': parts[2],
+                    'ip_address': parts[6],
+                    'or_port': parts[7],
+                    'dir_port': parts[8]
+                }
+                relays.append(relay_info)
+        
+        return relays
+    
+    def identify_node_types(self, relays):
+        """
+        Classify nodes as entry (guard), middle, or exit nodes
+        """
+        # Fetch server descriptors for detailed flags
+        details_url = f"{self.collector_url}/recent/relay-descriptors/server-descriptors/"
+        
+        for relay in relays:
+            # Check relay flags from consensus
+            if 'Guard' in relay.get('flags', []):
+                relay['type'] = 'entry'
+            elif 'Exit' in relay.get('flags', []):
+                relay['type'] = 'exit'
+            else:
+                relay['type'] = 'middle'
+        
+        return relays
+    
+    def get_tor_relay_list(self):
+        """
+        Get comprehensive list of TOR entry, middle, and exit nodes
+        """
+        # Alternative: Use TOR Metrics API details endpoint
+        details_url = "https://onionoo.torproject.org/details"
+        response = requests.get(details_url)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return self.categorize_relays(data['relays'])
+        
+        return []
+    
+    def categorize_relays(self, relays):
+        """
+        Categorize relays by type (entry/guard, middle, exit)
+        """
+        categorized = {
+            'entry_nodes': [],
+            'middle_nodes': [],
+            'exit_nodes': []
+        }
+        
+        for relay in relays:
+            flags = relay.get('flags', [])
+            or_addresses = relay.get('or_addresses', [])
+            
+            relay_data = {
+                'nickname': relay.get('nickname'),
+                'fingerprint': relay.get('fingerprint'),
+                'addresses': or_addresses,
+                'bandwidth': relay.get('observed_bandwidth', 0),
+                'flags': flags
+            }
+            
+            if 'Guard' in flags:
+                categorized['entry_nodes'].append(relay_data)
+            if 'Exit' in flags:
+                categorized['exit_nodes'].append(relay_data)
+            if 'Guard' not in flags and 'Exit' not in flags:
+                categorized['middle_nodes'].append(relay_data)
+        
+        return categorized
+    
+    def save_relay_data(self, relays, filename='tor_relays.json'):
+        """
+        Save relay data to JSON file for analysis
+        """
+        with open(filename, 'w') as f:
+            json.dump(relays, f, indent=4)
+        
+        print(f"Saved {len(relays)} relays to {filename}")
+
+# Usage
+collector = TorNodeCollector()
+relay_list = collector.get_tor_relay_list()
+collector.save_relay_data(relay_list, 'tor_nodes_database.json')
+Key Resources:
+
+TOR Metrics CollecTor: https://collector.torproject.org​
+
+Onionoo API: https://onionoo.torproject.org​
+
+Metrics-lib Java Library (can be ported): https://metrics.torproject.org​
+
+3.1.2 Network Traffic Capture (PCAP)
+Capture network traffic to analyze TOR connections in real-time or from forensic evidence.
+
+Using Wireshark/tcpdump:
+
+bash
+# Capture traffic on localhost (where TOR SOCKS proxy runs)
+sudo tcpdump -i lo -w tor_traffic.pcap port 9050 or port 9051
+
+# Capture all traffic for broader analysis
+sudo tcpdump -i eth0 -w network_traffic.pcap -s 0
+Python-based Traffic Capture with Scapy:
+
+python
+from scapy.all import *
+import datetime
+
+class TorTrafficCapture:
+    def __init__(self, interface='eth0'):
+        self.interface = interface
+        self.packets = []
+        
+    def packet_callback(self, packet):
+        """
+        Callback for each captured packet
+        """
+        if packet.haslayer(TCP):
+            # Check if packet involves TOR ports
+            if packet[TCP].dport in [9050, 9051, 443] or packet[TCP].sport in [9050, 9051, 443]:
+                packet_info = {
+                    'timestamp': datetime.datetime.now(),
+                    'src_ip': packet[IP].src if packet.haslayer(IP) else None,
+                    'dst_ip': packet[IP].dst if packet.haslayer(IP) else None,
+                    'src_port': packet[TCP].sport,
+                    'dst_port': packet[TCP].dport,
+                    'length': len(packet),
+                    'flags': packet[TCP].flags
+                }
+                self.packets.append(packet_info)
+                print(f"Captured TOR packet: {packet_info}")
+    
+    def start_capture(self, count=1000):
+        """
+        Start packet capture
+        """
+        print(f"Starting packet capture on {self.interface}...")
+        sniff(iface=self.interface, prn=self.packet_callback, count=count, store=False)
+    
+    def save_capture(self, filename='tor_capture.pcap'):
+        """
+        Save captured packets to PCAP file
+        """
+        wrpcap(filename, self.packets)
+        print(f"Saved {len(self.packets)} packets to {filename}")
+
+# Usage
+capture = TorTrafficCapture(interface='eth0')
+capture.start_capture(count=5000)
+Identifying TOR Traffic in PCAP:
+
+TOR traffic has identifiable characteristics:​
+
+Fixed cell size: 514 bytes (512 data + 2 header)
+
+TLS encryption: Uses specific cipher suites
+
+Regular timing patterns: Packets sent at regular intervals
+
+Known entry node IPs: Can be matched against TOR consensus
+
+3.2 Traffic Correlation & Timing Analysis
+Traffic correlation attacks link the ingress (entry) and egress (exit) segments of TOR connections by analyzing timing patterns, packet sizes, and flow characteristics.​
+
+3.2.1 Statistical Correlation Methods
+Pearson Correlation Coefficient:
+
+python
+import numpy as np
+from scipy.stats import pearsonr, spearmanr
+
+class TrafficCorrelation:
+    def __init__(self):
+        self.entry_flows = []
+        self.exit_flows = []
+    
+    def extract_flow_features(self, pcap_file, node_type='entry'):
+        """
+        Extract timing and size features from PCAP
+        """
+        from scapy.all import rdpcap
+        
+        packets = rdpcap(pcap_file)
+        flow_features = []
+        
+        for packet in packets:
+            if packet.haslayer(TCP):
+                feature = {
+                    'timestamp': float(packet.time),
+                    'size': len(packet),
+                    'direction': 'in' if packet[TCP].flags == 'S' else 'out'
+                }
+                flow_features.append(feature)
+        
+        return flow_features
+    
+    def create_time_series(self, flow_features, bin_size=0.1):
+        """
+        Create time-series representation of traffic flow
+        Bin packets into time windows and count/sum sizes
+        """
+        if not flow_features:
+            return []
+        
+        start_time = flow_features[0]['timestamp']
+        time_series = []
+        current_bin = 0
+        packet_count = 0
+        total_size = 0
+        
+        for feature in flow_features:
+            relative_time = feature['timestamp'] - start_time
+            bin_index = int(relative_time / bin_size)
+            
+            if bin_index > current_bin:
+                time_series.append({
+                    'bin': current_bin,
+                    'count': packet_count,
+                    'total_size': total_size
+                })
+                current_bin = bin_index
+                packet_count = 0
+                total_size = 0
+            
+            packet_count += 1
+            total_size += feature['size']
+        
+        return time_series
+    
+    def correlate_flows(self, entry_flow, exit_flow):
+        """
+        Compute correlation between entry and exit flows
+        """
+        entry_ts = self.create_time_series(entry_flow)
+        exit_ts = self.create_time_series(exit_flow)
+        
+        # Align time series to same length
+        min_len = min(len(entry_ts), len(exit_ts))
+        entry_counts = [ts['count'] for ts in entry_ts[:min_len]]
+        exit_counts = [ts['count'] for ts in exit_ts[:min_len]]
+        
+        # Compute Pearson correlation
+        if len(entry_counts) > 1:
+            correlation, p_value = pearsonr(entry_counts, exit_counts)
+            return correlation, p_value
+        
+        return 0, 1.0
+    
+    def timing_correlation_attack(self, entry_pcap, exit_pcap):
+        """
+        Perform timing correlation attack
+        """
+        entry_features = self.extract_flow_features(entry_pcap, 'entry')
+        exit_features = self.extract_flow_features(exit_pcap, 'exit')
+        
+        correlation, p_value = self.correlate_flows(entry_features, exit_features)
+        
+        result = {
+            'correlation_coefficient': correlation,
+            'p_value': p_value,
+            'confidence': self.calculate_confidence(correlation, p_value),
+            'match': correlation > 0.8 and p_value < 0.05
+        }
+        
+        return result
+    
+    def calculate_confidence(self, correlation, p_value):
+        """
+        Calculate confidence score for correlation match
+        """
+        if correlation > 0.9 and p_value < 0.01:
+            return 'HIGH'
+        elif correlation > 0.75 and p_value < 0.05:
+            return 'MEDIUM'
+        else:
+            return 'LOW'
+
+# Usage
+correlator = TrafficCorrelation()
+result = correlator.timing_correlation_attack('entry_node.pcap', 'exit_node.pcap')
+print(f"Correlation: {result['correlation_coefficient']:.3f}, Confidence: {result['confidence']}")
+Spearman Rank Correlation (Alternative Method):
+
+This method is more robust to non-linear relationships.​
+
+python
+def spearman_correlation(self, entry_flow, exit_flow):
+    """
+    Compute Spearman rank correlation
+    """
+    entry_ts = self.create_time_series(entry_flow)
+    exit_ts = self.create_time_series(exit_flow)
+    
+    min_len = min(len(entry_ts), len(exit_ts))
+    entry_sizes = [ts['total_size'] for ts in entry_ts[:min_len]]
+    exit_sizes = [ts['total_size'] for ts in exit_ts[:min_len]]
+    
+    correlation, p_value = spearmanr(entry_sizes, exit_sizes)
+    return correlation, p_value
+3.2.2 Deep Learning-Based Flow Correlation (DeepCorr)
+For higher accuracy, implement a CNN-based correlation model inspired by DeepCorr research.​
+
+DeepCorr Implementation Architecture:
+
+python
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+class DeepCorrModel:
+    def __init__(self, input_shape=(900, 2)):
+        """
+        DeepCorr model for TOR flow correlation
+        Input: Packet direction and size sequences
+        """
+        self.model = self.build_model(input_shape)
+    
+    def build_model(self, input_shape):
+        """
+        Build CNN architecture for flow correlation
+        """
+        model = keras.Sequential([
+            # Convolutional layers
+            layers.Conv1D(32, kernel_size=8, activation='relu', input_shape=input_shape),
+            layers.MaxPooling1D(pool_size=8),
+            
+            layers.Conv1D(64, kernel_size=8, activation='relu'),
+            layers.MaxPooling1D(pool_size=8),
+            
+            layers.Conv1D(128, kernel_size=8, activation='relu'),
+            layers.MaxPooling1D(pool_size=8),
+            
+            # Fully connected layers
+            layers.Flatten(),
+            layers.Dense(256, activation='relu'),
+            layers.Dropout(0.5),
+            layers.Dense(128, activation='relu'),
+            layers.Dropout(0.3),
+            
+            # Output: correlation score
+            layers.Dense(1, activation='sigmoid')
+        ])
+        
+        model.compile(
+            optimizer='adam',
+            loss='binary_crossentropy',
+            metrics=['accuracy', 'AUC']
+        )
+        
+        return model
+    
+    def prepare_training_data(self, entry_flows, exit_flows, labels):
+        """
+        Prepare flow pairs for training
+        labels: 1 if flows are correlated, 0 otherwise
+        """
+        X_entry = []
+        X_exit = []
+        
+        for entry, exit in zip(entry_flows, exit_flows):
+            # Convert to direction and size sequences
+            entry_seq = self.flow_to_sequence(entry)
+            exit_seq = self.flow_to_sequence(exit)
+            
+            X_entry.append(entry_seq)
+            X_exit.append(exit_seq)
+        
+        X_entry = np.array(X_entry)
+        X_exit = np.array(X_exit)
+        
+        # Concatenate entry and exit features
+        X = np.concatenate([X_entry, X_exit], axis=2)
+        y = np.array(labels)
+        
+        return X, y
+    
+    def flow_to_sequence(self, flow_features, max_packets=900):
+        """
+        Convert flow to direction+size sequence
+        Direction: 1 (outgoing), -1 (incoming)
+        """
+        sequence = []
+        
+        for packet in flow_features[:max_packets]:
+            direction = 1 if packet['direction'] == 'out' else -1
+            size = packet['size']
+            sequence.append([direction, size])
+        
+        # Pad to max_packets
+        while len(sequence) < max_packets:
+            sequence.append([0, 0])
+        
+        return np.array(sequence)
+    
+    def train(self, X_train, y_train, epochs=50, batch_size=32):
+        """
+        Train DeepCorr model
+        """
+        history = self.model.fit(
+            X_train, y_train,
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_split=0.2,
+            verbose=1
+        )
+        
+        return history
+    
+    def predict_correlation(self, entry_flow, exit_flow):
+        """
+        Predict if two flows are correlated
+        """
+        entry_seq = self.flow_to_sequence(entry_flow)
+        exit_seq = self.flow_to_sequence(exit_flow)
+        
+        X = np.concatenate([entry_seq, exit_seq], axis=1)
+        X = np.expand_dims(X, axis=0)
+        
+        correlation_score = self.model.predict(X)[0][0]
+        
+        return {
+            'correlation_score': float(correlation_score),
+            'match': correlation_score > 0.9,
+            'confidence': 'HIGH' if correlation_score > 0.95 else 'MEDIUM' if correlation_score > 0.8 else 'LOW'
+        }
+
+# Usage
+deep_corr = DeepCorrModel()
+
+# Training (requires labeled dataset)
+# X_train, y_train = deep_corr.prepare_training_data(entry_flows, exit_flows, labels)
+# deep_corr.train(X_train, y_train, epochs=30)
+
+# Inference
+# result = deep_corr.predict_correlation(entry_flow, exit_flow)
+Dataset Generation for Training:
+
+To train the DeepCorr model, you need labeled flow pairs. Generate synthetic training data using TOR simulation tools like Shadow.​
+
+3.3 Entry/Guard Node Identification
+The critical challenge is identifying which entry (guard) node a TOR user connected through. Guard nodes are persistent for 2-3 months per user.​
+
+Identification Strategy:
+
+python
+class EntryNodeIdentifier:
+    def __init__(self, relay_database):
+        """
+        relay_database: Dictionary of known TOR relays
+        """
+        self.relay_database = relay_database
+        self.entry_candidates = []
+    
+    def identify_from_pcap(self, pcap_file, victim_ip):
+        """
+        Identify potential entry nodes from PCAP
+        """
+        from scapy.all import rdpcap
+        
+        packets = rdpcap(pcap_file)
+        connections = {}
+        
+        for packet in packets:
+            if packet.haslayer(IP) and packet.haslayer(TCP):
+                src_ip = packet[IP].src
+                dst_ip = packet[IP].dst
+                
+                # Check if victim is connecting to known TOR node
+                if src_ip == victim_ip:
+                    if self.is_tor_relay(dst_ip):
+                        if dst_ip not in connections:
+                            connections[dst_ip] = {
+                                'ip': dst_ip,
+                                'first_seen': packet.time,
+                                'packet_count': 0,
+                                'total_bytes': 0
+                            }
+                        
+                        connections[dst_ip]['packet_count'] += 1
+                        connections[dst_ip]['total_bytes'] += len(packet)
+        
+        # Sort by packet count and bytes (entry nodes have sustained connections)
+        sorted_connections = sorted(
+            connections.values(),
+            key=lambda x: (x['packet_count'], x['total_bytes']),
+            reverse=True
+        )
+        
+        # Top 3 connections are likely guard nodes
+        self.entry_candidates = sorted_connections[:3]
+        
+        return self.entry_candidates
+    
+    def is_tor_relay(self, ip_address):
+        """
+        Check if IP is a known TOR relay
+        """
+        for category in ['entry_nodes', 'middle_nodes', 'exit_nodes']:
+            for relay in self.relay_database.get(category, []):
+                for address in relay.get('addresses', []):
+                    if ip_address in address:
+                        return True
+        return False
+    
+    def refine_with_exit_correlation(self, exit_nodes, correlation_results):
+        """
+        Refine entry node identification using exit node correlation
+        """
+        refined_candidates = []
+        
+        for entry_candidate in self.entry_candidates:
+            confidence_scores = []
+            
+            for exit_node in exit_nodes:
+                # Find correlation result for this entry-exit pair
+                correlation = self.find_correlation(
+                    entry_candidate['ip'],
+                    exit_node,
+                    correlation_results
+                )
+                
+                if correlation:
+                    confidence_scores.append(correlation['correlation_coefficient'])
+            
+            if confidence_scores:
+                avg_confidence = np.mean(confidence_scores)
+                entry_candidate['confidence'] = avg_confidence
+                refined_candidates.append(entry_candidate)
+        
+        # Sort by confidence
+        refined_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        return refined_candidates
+    
+    def find_correlation(self, entry_ip, exit_ip, correlation_results):
+        """
+        Find correlation result for entry-exit pair
+        """
+        for result in correlation_results:
+            if result['entry_ip'] == entry_ip and result['exit_ip'] == exit_ip:
+                return result
+        return None
+
+# Usage
+identifier = EntryNodeIdentifier(relay_database=relay_list)
+entry_candidates = identifier.identify_from_pcap('victim_traffic.pcap', victim_ip='192.168.1.100')
+print(f"Identified {len(entry_candidates)} potential entry nodes")
+3.4 Visualization Dashboard
+Build an interactive web dashboard to visualize TOR network paths, correlation results, and forensic reports.
+
+3.4.1 Flask Backend
+python
+from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
+import json
+
+app = Flask(__name__)
+CORS(app)
+
+# Global data storage
+tor_data = {
+    'relays': {},
+    'correlation_results': [],
+    'entry_nodes': [],
+    'network_graph': {}
+}
+
+@app.route('/')
+def index():
+    return render_template('dashboard.html')
+
+@app.route('/api/relays', methods=['GET'])
+def get_relays():
+    """
+    Return TOR relay database
+    """
+    return jsonify(tor_data['relays'])
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze_traffic():
+    """
+    Trigger traffic analysis on uploaded PCAP
+    """
+    pcap_file = request.files.get('pcap')
+    victim_ip = request.form.get('victim_ip')
+    
+    if not pcap_file or not victim_ip:
+        return jsonify({'error': 'Missing required parameters'}), 400
+    
+    # Save PCAP
+    pcap_path = f'uploads/{pcap_file.filename}'
+    pcap_file.save(pcap_path)
+    
+    # Run analysis
+    collector = TorNodeCollector()
+    correlator = TrafficCorrelation()
+    identifier = EntryNodeIdentifier(tor_data['relays'])
+    
+    # Identify entry nodes
+    entry_candidates = identifier.identify_from_pcap(pcap_path, victim_ip)
+    
+    # Perform correlation (mock for demo)
+    correlation_result = {
+        'entry_ip': entry_candidates[0]['ip'] if entry_candidates else 'Unknown',
+        'exit_ip': 'Pending analysis',
+        'correlation_coefficient': 0.87,
+        'confidence': 'HIGH',
+        'timestamp': datetime.datetime.now().isoformat()
+    }
+    
+    tor_data['correlation_results'].append(correlation_result)
+    tor_data['entry_nodes'] = entry_candidates
+    
+    return jsonify({
+        'status': 'success',
+        'entry_nodes': entry_candidates,
+        'correlation': correlation_result
+    })
+
+@app.route('/api/network-graph', methods=['GET'])
+def get_network_graph():
+    """
+    Generate network graph for visualization
+    """
+    nodes = []
+    edges = []
+    
+    # Add victim node
+    nodes.append({
+        'id': 'victim',
+        'label': 'Target User',
+        'type': 'victim',
+        'color': '#ff0000'
+    })
+    
+    # Add entry nodes
+    for i, entry in enumerate(tor_data['entry_nodes'][:3]):
+        node_id = f"entry_{i}"
+        nodes.append({
+            'id': node_id,
+            'label': f"Entry: {entry['ip']}",
+            'type': 'entry',
+            'color': '#00ff00'
+        })
+        edges.append({
+            'source': 'victim',
+            'target': node_id,
+            'weight': entry['packet_count']
+        })
+    
+    # Add exit nodes (mock data)
+    exit_node = {
+        'id': 'exit_1',
+        'label': 'Exit: 45.67.89.123',
+        'type': 'exit',
+        'color': '#0000ff'
+    }
+    nodes.append(exit_node)
+    edges.append({
+        'source': 'entry_0',
+        'target': 'exit_1',
+        'weight': 1000
+    })
+    
+    return jsonify({
+        'nodes': nodes,
+        'edges': edges
+    })
+
+@app.route('/api/forensic-report', methods=['GET'])
+def generate_forensic_report():
+    """
+    Generate downloadable forensic report
+    """
+    report = {
+        'analysis_date': datetime.datetime.now().isoformat(),
+        'victim_info': {
+            'ip': '192.168.1.100',
+            'identified_entry_nodes': tor_data['entry_nodes']
+        },
+        'correlation_results': tor_data['correlation_results'],
+        'confidence_summary': {
+            'high_confidence_matches': len([r for r in tor_data['correlation_results'] if r['confidence'] == 'HIGH']),
+            'medium_confidence_matches': len([r for r in tor_data['correlation_results'] if r['confidence'] == 'MEDIUM']),
+            'low_confidence_matches': len([r for r in tor_data['correlation_results'] if r['confidence'] == 'LOW'])
+        }
+    }
+    
+    return jsonify(report)
+
+if __name__ == '__main__':
+    # Initialize relay database
+    collector = TorNodeCollector()
+    tor_data['relays'] = collector.get_tor_relay_list()
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
+3.4.2 Frontend Visualization (D3.js)
+Create templates/dashboard.html:
+
+xml
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TOR Unveil Dashboard</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        
+        #network-graph {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+        }
+        
+        .node {
+            stroke: #fff;
+            stroke-width: 2px;
+        }
+        
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        
+        #controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>TOR - Unveil: Network Analysis Dashboard</h1>
+    
+    <div id="controls">
+        <input type="file" id="pcap-upload" accept=".pcap,.pcapng">
+        <input type="text" id="victim-ip" placeholder="Victim IP Address">
+        <button onclick="analyzeTraffic()">Analyze Traffic</button>
+        <button onclick="downloadReport()">Download Report</button>
+    </div>
+    
+    <div id="stats">
+        <h3>Analysis Statistics</h3>
+        <div id="stats-content"></div>
+    </div>
+    
+    <h2>Network Topology</h2>
+    <svg id="network-graph"></svg>
+    
+    <script>
+        let graphData = { nodes: [], edges: [] };
+        
+        function analyzeTraffic() {
+            const pcapFile = document.getElementById('pcap-upload').files[0];
+            const victimIp = document.getElementById('victim-ip').value;
+            
+            if (!pcapFile || !victimIp) {
+                alert('Please provide PCAP file and victim IP');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('pcap', pcapFile);
+            formData.append('victim_ip', victimIp);
+            
+            fetch('/api/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Analysis complete:', data);
+                updateStats(data);
+                loadNetworkGraph();
+            })
+            .catch(error => console.error('Error:', error));
+        }
+        
+        function updateStats(data) {
+            const statsDiv = document.getElementById('stats-content');
+            statsDiv.innerHTML = `
+                <p>Entry Nodes Identified: ${data.entry_nodes.length}</p>
+                <p>Correlation Coefficient: ${data.correlation.correlation_coefficient.toFixed(3)}</p>
+                <p>Confidence: ${data.correlation.confidence}</p>
+            `;
+        }
+        
+        function loadNetworkGraph() {
+            fetch('/api/network-graph')
+            .then(response => response.json())
+            .then(data => {
+                graphData = data;
+                renderNetworkGraph();
+            });
+        }
+        
+        function renderNetworkGraph() {
+            const svg = d3.select('#network-graph');
+            svg.selectAll('*').remove();
+            
+            const width = 1200;
+            const height = 600;
+            svg.attr('width', width).attr('height', height);
+            
+            // Create force simulation
+            const simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(graphData.edges)
+                    .id(d => d.id)
+                    .distance(150))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2));
+            
+            // Draw links
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(graphData.edges)
+                .enter().append('line')
+                .attr('class', 'link')
+                .attr('stroke-width', d => Math.sqrt(d.weight) / 10);
+            
+            // Draw nodes
+            const node = svg.append('g')
+                .selectAll('circle')
+                .data(graphData.nodes)
+                .enter().append('circle')
+                .attr('class', 'node')
+                .attr('r', 20)
+                .attr('fill', d => d.color)
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+            
+            // Add labels
+            const label = svg.append('g')
+                .selectAll('text')
+                .data(graphData.nodes)
+                .enter().append('text')
+                .text(d => d.label)
+                .attr('font-size', 12)
+                .attr('dx', 25)
+                .attr('dy', 5);
+            
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+            
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+        
+        function downloadReport() {
+            fetch('/api/forensic-report')
+            .then(response => response.json())
+            .then(data => {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tor_forensic_report_${Date.now()}.json`;
+                a.click();
+            });
+        }
+        
+        // Load initial graph on page load
+        loadNetworkGraph();
+    </script>
+</body>
+</html>
+4. Existing References & Research
+4.1 Academic Papers & Research
+Research	Description	Key Contributions	Citation
+DeepCorr	CNN-based flow correlation using deep learning	96% accuracy with 900 packets, significantly outperforms statistical methods	Nasr et al., 2018​
+SUMo Attack	Flow correlation using sliding subset sum on onion services	Scalable distributed pipeline, effective circuit fingerprinting	Flow Correlation Attacks, 2023​
+Correlation Attacks on Tor	End-to-end correlation using Tor log files	Three correlation methods evaluated on Shadow simulations	Thesis, UCLouvain, 2025​
+German Authorities Case	Real-world timing analysis deanonymization	ISP cooperation + timing analysis successfully traced users	Tagesschau, 2024​
+Traffic Analysis Survey	Comprehensive survey of TOR traffic analysis attacks	Categorizes attacks, defenses, and effectiveness	Basyoni et al.​
+4.2 Open Source Tools & Implementations
+Tool	Purpose	GitHub/Source	Technology
+Stem	Python TOR controller library	github.com/torproject/stem​	Python
+Scapy	Packet manipulation and analysis	scapy.net​	Python
+PyShark	Python wrapper for Wireshark/tshark	PyShark	Python
+DeepCorr Implementation	Replicated DeepCorr attack	github.com (various forks)​	Python, TensorFlow
+SUMo Pipeline	Flow correlation implementation	github.com​	Python
+Wireshark PCAP Analyzer	PCAP analysis and reporting	github.com​	Python
+TOR Metrics CollecTor	TOR network data collection service	metrics.torproject.org​	Java, APIs
+4.3 Key Techniques References
+Timing Correlation Attacks:
+
+German authorities used timing analysis + ISP data to deanonymize TOR users​
+
+Requires control/observation of entry and exit nodes​
+
+Statistical correlation (Pearson, Spearman) with correlation coefficient > 0.87​
+
+Machine Learning Approaches:
+
+DeepCorr achieves 96% accuracy vs. 4% for traditional RAPTOR​
+
+CNN architecture learns flow correlation function tailored to TOR​
+
+Requires ~900 packets (900KB) per flow for reliable correlation​
+
+Entry Node Identification:
+
+Guard nodes persist for 2-3 months per client​
+
+Identified through sustained TLS connections to known relays​
+
+Top 3 connections by packet count/duration are likely guards​
+
+PCAP Analysis:
+
+TOR traffic identifiable by 514-byte cell size​
+
+TLS cipher suites and timing patterns distinctive​
+
+Can analyze localhost traffic before encryption
