@@ -6,7 +6,7 @@ import { Network, ZoomIn, ZoomOut, Maximize2, RefreshCw } from "lucide-react";
 import { TorNode, NetworkTopologyNode } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 
 export default function NetworkTopology() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,7 +18,7 @@ export default function NetworkTopology() {
   });
 
   // Convert TOR nodes to topology nodes for visualization with deterministic layout
-  const topologyNodes: NetworkTopologyNode[] = React.useMemo(() => {
+  const topologyNodes: NetworkTopologyNode[] = useMemo(() => {
     if (!nodes) return [];
     
     const entryNodes = nodes.filter(n => n.nodeType === "entry").slice(0, 30);
