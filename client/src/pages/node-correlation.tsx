@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import { GitBranch, Upload, ArrowRight, Filter, FileUp, CheckCircle2, AlertCircle } from "lucide-react";
-import { Correlation, CorrelationMetrics } from "@shared/schema";
+import { GitBranch, Upload, ArrowRight, Filter, FileUp, CheckCircle2, AlertCircle, Database, AlertTriangle } from "lucide-react";
+import { Correlation, CorrelationMetrics, TorNode, DashboardStats } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -25,15 +25,25 @@ import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useLocation } from "wouter";
 
 export default function NodeCorrelation() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confidenceFilter, setConfidenceFilter] = useState<string>("all");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
+
+  const { data: nodes } = useQuery<TorNode[]>({
+    queryKey: ["/api/tor-nodes"],
+  });
+
+  const { data: stats } = useQuery<DashboardStats>({
+    queryKey: ["/api/stats"],
+  });
 
   const { data: correlations, isLoading: correlationsLoading } = useQuery<Correlation[]>({
     queryKey: ["/api/correlations"],
@@ -42,6 +52,11 @@ export default function NodeCorrelation() {
   const { data: metrics, isLoading: metricsLoading } = useQuery<CorrelationMetrics>({
     queryKey: ["/api/correlations/metrics"],
   });
+
+  const hasNodes = nodes && nodes.length > 0;
+  const hasEntryNodes = stats && stats.entryNodes > 0;
+  const hasExitNodes = stats && stats.exitNodes > 0;
+  const canAnalyze = hasEntryNodes && hasExitNodes;
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -59,19 +74,34 @@ export default function NodeCorrelation() {
 
       return response.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/correlations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/correlations/metrics"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/traffic-flows"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/correlations"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/correlations/metrics"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/traffic-flows"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       
-      setUploadStatus("success");
-      toast({
-        title: "Analysis Complete",
-        description: `Successfully analyzed ${data.packetCount.toLocaleString()} packets and generated correlations`,
-      });
-      
-      setSelectedFile(null);
+      // Wait a moment for queries to refetch
+      setTimeout(async () => {
+        const updatedCorrelations = await queryClient.fetchQuery({ queryKey: ["/api/correlations"] });
+        const correlationCount = Array.isArray(updatedCorrelations) ? updatedCorrelations.length : 0;
+        
+        setUploadStatus("success");
+        
+        if (correlationCount > 0) {
+          toast({
+            title: "Analysis Complete",
+            description: `Successfully analyzed ${data.packetCount.toLocaleString()} packets and generated ${correlationCount} correlations`,
+          });
+        } else {
+          toast({
+            title: "Analysis Complete - No Correlations",
+            description: "PCAP analyzed but no correlations could be generated. Make sure you have entry and exit nodes collected.",
+            variant: "destructive",
+          });
+        }
+        
+        setSelectedFile(null);
+      }, 500);
     },
     onError: (error: Error) => {
       setUploadStatus("error");
@@ -100,6 +130,15 @@ export default function NodeCorrelation() {
   };
 
   const handleAnalyze = () => {
+    if (!canAnalyze) {
+      toast({
+        title: "Cannot Analyze",
+        description: "Please collect TOR nodes first. Go to Data Collection and click 'Collect TOR Nodes'.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (selectedFile) {
       uploadMutation.mutate(selectedFile);
     }
@@ -127,6 +166,30 @@ export default function NodeCorrelation() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!canAnalyze && (
+            <Alert variant="destructive" data-testid="alert-no-nodes">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>TOR Nodes Required</AlertTitle>
+              <AlertDescription className="mt-2 space-y-2">
+                <p>
+                  You need to collect TOR nodes before analyzing PCAP files. 
+                  {!hasNodes && " No nodes found in the database."}
+                  {hasNodes && !hasEntryNodes && " No entry nodes available."}
+                  {hasNodes && !hasExitNodes && " No exit nodes available."}
+                </p>
+                <Button
+                  onClick={() => navigate("/data-collection")}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  data-testid="button-go-to-collection"
+                >
+                  <Database className="w-4 h-4 mr-2" />
+                  Go to Data Collection
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate">
             <input
               ref={fileInputRef}
