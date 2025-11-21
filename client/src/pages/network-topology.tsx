@@ -155,6 +155,32 @@ export default function NetworkTopology() {
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.2, 3));
   const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.2, 0.5));
 
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || !topologyNodes.length) return;
+
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Find the clicked node by checking distance from click point
+    const clickRadius = 15 * zoomLevel; // Slightly larger than node radius for easier clicking
+    
+    for (const node of topologyNodes) {
+      const nodeX = node.x! * zoomLevel;
+      const nodeY = node.y! * zoomLevel;
+      const distance = Math.sqrt(Math.pow(x - nodeX, 2) + Math.pow(y - nodeY, 2));
+      
+      if (distance <= clickRadius) {
+        setSelectedNode(node);
+        return;
+      }
+    }
+    
+    // If no node was clicked, deselect
+    setSelectedNode(null);
+  };
+
   return (
     <div className="p-8 space-y-8">
       <div>
@@ -214,7 +240,8 @@ export default function NetworkTopology() {
               <div className="relative overflow-hidden border rounded-md bg-card">
                 <canvas
                   ref={canvasRef}
-                  className="w-full h-[600px] cursor-crosshair"
+                  className="w-full h-[600px] cursor-pointer"
+                  onClick={handleCanvasClick}
                   data-testid="canvas-network-topology"
                 />
                 <div className="absolute bottom-4 right-4 bg-card/90 backdrop-blur-sm border rounded-md p-3">
