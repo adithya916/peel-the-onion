@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export default function DataCollection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filterType, setFilterType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   const { data: nodes, isLoading } = useQuery<TorNode[]>({
     queryKey: ["/api/tor-nodes"],
@@ -63,6 +73,15 @@ export default function DataCollection() {
       node.fingerprint.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesType && matchesSearch;
   });
+
+  const totalPages = filteredNodes ? Math.ceil(filteredNodes.length / itemsPerPage) : 0;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentNodes = filteredNodes?.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, searchQuery]);
 
   return (
     <div className="p-8 space-y-8">
@@ -201,7 +220,7 @@ export default function DataCollection() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredNodes.slice(0, 50).map((node) => (
+                  {currentNodes?.map((node) => (
                     <TableRow key={node.id} data-testid={`node-row-${node.id}`}>
                       <TableCell className="font-medium">{node.nickname}</TableCell>
                       <TableCell>
@@ -221,10 +240,53 @@ export default function DataCollection() {
               </Table>
             </div>
           )}
-          {filteredNodes && filteredNodes.length > 50 && (
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              Showing first 50 of {filteredNodes.length} nodes
-            </p>
+          {filteredNodes && filteredNodes.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-muted-foreground text-center">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredNodes.length)} of {filteredNodes.length} nodes
+              </p>
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) setCurrentPage(currentPage - 1);
+                        }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentPage(page);
+                          }}
+                          isActive={currentPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                        }}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
