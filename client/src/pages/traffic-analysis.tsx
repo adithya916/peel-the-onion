@@ -235,7 +235,17 @@ export default function TrafficAnalysis() {
         </CardContent>
       </Card>
 
-      {selectedFlow && selectedFlow.parsedData && (
+      {selectedFlow && selectedFlow.parsedData && (() => {
+        const parsedData = selectedFlow.parsedData as any || {};
+        const summary = parsedData.summary || {};
+        const httpRequests = parsedData.httpRequests || [];
+        const extractedFiles = parsedData.extractedFiles || [];
+        const credentials = parsedData.credentials || [];
+        const browserActivity = parsedData.browserActivity || [];
+        const searchQueries = parsedData.searchQueries || [];
+        const connections = parsedData.connections || [];
+
+        return (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -256,7 +266,7 @@ export default function TrafficAnalysis() {
           </div>
 
           {/* Summary Statistics */}
-          {(selectedFlow.parsedData as any).summary && (
+          {summary.totalHTTPRequests !== undefined && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">Analysis Summary</CardTitle>
@@ -267,32 +277,32 @@ export default function TrafficAnalysis() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
                       HTTP Requests
                     </p>
-                    <p className="text-2xl font-bold tabular-nums">
-                      {(selectedFlow.parsedData as any).summary.totalHTTPRequests || 0}
+                    <p className="text-2xl font-bold tabular-nums" data-testid="text-http-requests-count">
+                      {summary.totalHTTPRequests || 0}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
                       Extracted Files
                     </p>
-                    <p className="text-2xl font-bold tabular-nums text-chart-1">
-                      {(selectedFlow.parsedData as any).summary.extractedFiles || 0}
+                    <p className="text-2xl font-bold tabular-nums text-chart-1" data-testid="text-extracted-files-count">
+                      {summary.extractedFiles || 0}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
                       Credentials Found
                     </p>
-                    <p className="text-2xl font-bold tabular-nums text-chart-4">
-                      {(selectedFlow.parsedData as any).summary.credentialsFound || 0}
+                    <p className="text-2xl font-bold tabular-nums text-chart-4" data-testid="text-credentials-count">
+                      {summary.credentialsFound || 0}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
                       Unique Hosts
                     </p>
-                    <p className="text-2xl font-bold tabular-nums">
-                      {(selectedFlow.parsedData as any).summary.uniqueHosts || 0}
+                    <p className="text-2xl font-bold tabular-nums" data-testid="text-unique-hosts-count">
+                      {summary.uniqueHosts || 0}
                     </p>
                   </div>
                 </div>
@@ -301,7 +311,7 @@ export default function TrafficAnalysis() {
           )}
 
           {/* HTTP Requests */}
-          {(selectedFlow.parsedData as any).httpRequests && (selectedFlow.parsedData as any).httpRequests.length > 0 && (
+          {httpRequests.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">HTTP Requests</CardTitle>
@@ -320,9 +330,9 @@ export default function TrafficAnalysis() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(selectedFlow.parsedData as any).httpRequests.map((req: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono text-sm">{req.frameNumber}</TableCell>
+                      {httpRequests.map((req: any, idx: number) => (
+                        <TableRow key={idx} data-testid={`row-http-request-${idx}`}>
+                          <TableCell className="font-mono text-sm" data-testid={`text-frame-${idx}`}>{req.frameNumber}</TableCell>
                           <TableCell>
                             <Badge variant={req.method === "GET" ? "secondary" : "default"}>
                               {req.method}
@@ -347,7 +357,7 @@ export default function TrafficAnalysis() {
           )}
 
           {/* Extracted Files */}
-          {(selectedFlow.parsedData as any).extractedFiles && (selectedFlow.parsedData as any).extractedFiles.length > 0 && (
+          {extractedFiles.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">Extracted Files</CardTitle>
@@ -366,9 +376,9 @@ export default function TrafficAnalysis() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(selectedFlow.parsedData as any).extractedFiles.map((file: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono text-sm">{file.frameNumber}</TableCell>
+                      {extractedFiles.map((file: any, idx: number) => (
+                        <TableRow key={idx} data-testid={`row-extracted-file-${idx}`}>
+                          <TableCell className="font-mono text-sm" data-testid={`text-file-frame-${idx}`}>{file.frameNumber}</TableCell>
                           <TableCell className="font-medium">{file.fileName}</TableCell>
                           <TableCell className="text-sm">{file.fileType}</TableCell>
                           <TableCell className="text-sm tabular-nums">
@@ -385,7 +395,7 @@ export default function TrafficAnalysis() {
           )}
 
           {/* Credentials Found */}
-          {(selectedFlow.parsedData as any).credentials && (selectedFlow.parsedData as any).credentials.length > 0 && (
+          {credentials.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">Credentials Found</CardTitle>
@@ -404,9 +414,9 @@ export default function TrafficAnalysis() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(selectedFlow.parsedData as any).credentials.map((cred: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono text-sm">{cred.frameNumber}</TableCell>
+                      {credentials.map((cred: any, idx: number) => (
+                        <TableRow key={idx} data-testid={`row-credential-${idx}`}>
+                          <TableCell className="font-mono text-sm" data-testid={`text-cred-frame-${idx}`}>{cred.frameNumber}</TableCell>
                           <TableCell>
                             <Badge variant="secondary">{cred.protocol}</Badge>
                           </TableCell>
@@ -423,7 +433,7 @@ export default function TrafficAnalysis() {
           )}
 
           {/* Browser Activity */}
-          {(selectedFlow.parsedData as any).browserActivity && (selectedFlow.parsedData as any).browserActivity.length > 0 && (
+          {browserActivity.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">Browser Activity</CardTitle>
@@ -431,8 +441,8 @@ export default function TrafficAnalysis() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {(selectedFlow.parsedData as any).browserActivity.map((activity: any, idx: number) => (
-                    <div key={idx} className="flex items-start gap-4 p-3 border rounded-md">
+                  {browserActivity.map((activity: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-4 p-3 border rounded-md" data-testid={`card-browser-activity-${idx}`}>
                       <div className="flex-1">
                         <p className="font-medium text-sm">{activity.title}</p>
                         <p className="text-xs font-mono text-muted-foreground mt-1">
@@ -451,7 +461,7 @@ export default function TrafficAnalysis() {
           )}
 
           {/* Search Queries */}
-          {(selectedFlow.parsedData as any).searchQueries && (selectedFlow.parsedData as any).searchQueries.length > 0 && (
+          {searchQueries.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">Search Queries</CardTitle>
@@ -459,8 +469,8 @@ export default function TrafficAnalysis() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {(selectedFlow.parsedData as any).searchQueries.map((query: any, idx: number) => (
-                    <div key={idx} className="flex items-start gap-4 p-3 border rounded-md bg-muted/30">
+                  {searchQueries.map((query: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-4 p-3 border rounded-md bg-muted/30" data-testid={`card-search-query-${idx}`}>
                       <div className="flex-1">
                         <p className="font-medium text-sm">"{query.query}"</p>
                         <p className="text-xs text-muted-foreground mt-1">
@@ -478,7 +488,7 @@ export default function TrafficAnalysis() {
           )}
 
           {/* Connection Details */}
-          {(selectedFlow.parsedData as any).connections && (selectedFlow.parsedData as any).connections.length > 0 && (
+          {connections.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-medium">Network Connections</CardTitle>
@@ -498,9 +508,9 @@ export default function TrafficAnalysis() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(selectedFlow.parsedData as any).connections.map((conn: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono text-xs">
+                      {connections.map((conn: any, idx: number) => (
+                        <TableRow key={idx} data-testid={`row-connection-${idx}`}>
+                          <TableCell className="font-mono text-xs" data-testid={`text-conn-source-${idx}`}>
                             {conn.sourceIP}:{conn.sourcePort}
                           </TableCell>
                           <TableCell className="font-mono text-xs">
@@ -525,7 +535,8 @@ export default function TrafficAnalysis() {
             </Card>
           )}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
