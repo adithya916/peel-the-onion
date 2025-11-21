@@ -93,70 +93,96 @@ export default function NetworkTopology() {
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // Draw connections between entry -> middle -> exit nodes
-    ctx.strokeStyle = "rgba(59, 130, 246, 0.15)";
-    ctx.lineWidth = 1;
-
+    // Draw connections between entry -> middle -> exit nodes with cyber glow
     const entryNodes = topologyNodes.filter(n => n.nodeType === 'entry');
     const middleNodes = topologyNodes.filter(n => n.nodeType === 'middle');
     const exitNodes = topologyNodes.filter(n => n.nodeType === 'exit');
 
-    // Connect entry nodes to random middle nodes
+    // Connect entry nodes to random middle nodes with neon cyan
+    ctx.lineWidth = 2;
     entryNodes.forEach((entryNode, i) => {
       const targetMiddle = middleNodes[i % middleNodes.length];
       if (targetMiddle) {
         ctx.beginPath();
+        ctx.strokeStyle = "rgba(0, 240, 255, 0.3)";
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(0, 240, 255, 0.6)";
         ctx.moveTo(entryNode.x! * zoomLevel, entryNode.y! * zoomLevel);
         ctx.lineTo(targetMiddle.x! * zoomLevel, targetMiddle.y! * zoomLevel);
         ctx.stroke();
       }
     });
 
-    // Connect middle nodes to exit nodes
+    // Connect middle nodes to exit nodes with neon purple
     middleNodes.forEach((middleNode, i) => {
       const targetExit = exitNodes[i % exitNodes.length];
       if (targetExit) {
         ctx.beginPath();
+        ctx.strokeStyle = "rgba(176, 38, 255, 0.3)";
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(176, 38, 255, 0.6)";
         ctx.moveTo(middleNode.x! * zoomLevel, middleNode.y! * zoomLevel);
         ctx.lineTo(targetExit.x! * zoomLevel, targetExit.y! * zoomLevel);
         ctx.stroke();
       }
     });
 
-    // Draw nodes
+    // Draw nodes with cyber glow
+    ctx.shadowBlur = 0;
     topologyNodes.forEach((node) => {
       const colors = {
-        entry: "#3b82f6",
-        middle: "#14b8a6",
-        exit: "#f97316",
+        entry: { fill: "rgba(0, 240, 255, 0.9)", glow: "rgba(0, 240, 255, 1)" },
+        middle: { fill: "rgba(176, 38, 255, 0.9)", glow: "rgba(176, 38, 255, 1)" },
+        exit: { fill: "rgba(255, 0, 110, 0.9)", glow: "rgba(255, 0, 110, 1)" },
       };
 
-      ctx.fillStyle = colors[node.nodeType];
+      const nodeColor = colors[node.nodeType];
+
+      // Outer glow
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = nodeColor.glow;
+      ctx.fillStyle = nodeColor.fill;
       ctx.beginPath();
       ctx.arc(
         node.x! * zoomLevel,
         node.y! * zoomLevel,
-        8 * zoomLevel,
+        10 * zoomLevel,
         0,
         2 * Math.PI
       );
       ctx.fill();
 
-      // Add ring for selected node
+      // Inner bright core
+      ctx.shadowBlur = 5;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.beginPath();
+      ctx.arc(
+        node.x! * zoomLevel,
+        node.y! * zoomLevel,
+        4 * zoomLevel,
+        0,
+        2 * Math.PI
+      );
+      ctx.fill();
+
+      // Add pulsing ring for selected node
       if (selectedNode?.id === node.id) {
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = nodeColor.glow;
+        ctx.strokeStyle = nodeColor.fill;
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(
           node.x! * zoomLevel,
           node.y! * zoomLevel,
-          12 * zoomLevel,
+          16 * zoomLevel,
           0,
           2 * Math.PI
         );
         ctx.stroke();
       }
     });
+    ctx.shadowBlur = 0;
   }, [topologyNodes, zoomLevel, selectedNode]);
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.2, 3));
@@ -189,11 +215,12 @@ export default function NetworkTopology() {
   };
 
   return (
-    <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Network Topology</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Interactive visualization of TOR network node connections
+    <div className="p-8 space-y-8 relative">
+      <div className="absolute inset-0 data-grid opacity-5 pointer-events-none" />
+      <div className="relative z-10">
+        <h1 className="text-3xl font-bold font-mono uppercase tracking-wider text-primary neon-text">Network Topology</h1>
+        <p className="text-sm text-muted-foreground mt-2 font-mono tracking-wide">
+          INTERACTIVE VISUALIZATION OF TOR NETWORK NODE CONNECTIONS
         </p>
       </div>
 

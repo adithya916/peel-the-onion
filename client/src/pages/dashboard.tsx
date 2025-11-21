@@ -54,11 +54,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          TOR network forensic analysis overview
+    <div className="p-8 space-y-8 relative">
+      <div className="absolute inset-0 data-grid opacity-5 pointer-events-none" />
+      <div className="relative z-10">
+        <h1 className="text-3xl font-bold font-mono uppercase tracking-wider text-primary neon-text">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-2 font-mono tracking-wide">
+          TOR NETWORK FORENSIC ANALYSIS OVERVIEW
         </p>
       </div>
 
@@ -105,11 +106,13 @@ export default function Dashboard() {
                 ))}
               </div>
             ) : !recentCorrelations || recentCorrelations.length === 0 ? (
-              <div className="text-center py-12">
-                <Network className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">No correlations yet</p>
+              <div className="text-center py-12 relative">
+                <div className="p-4 rounded-full bg-primary/5 border-2 border-primary/20 w-fit mx-auto mb-4 cyber-glow">
+                  <Network className="w-12 h-12 text-primary drop-shadow-[0_0_8px_hsl(var(--primary))]" />
+                </div>
+                <p className="text-sm text-muted-foreground font-mono uppercase tracking-wide">No correlations yet</p>
                 <Link href="/analysis">
-                  <Button variant="outline" size="sm" className="mt-4" data-testid="button-upload-pcap">
+                  <Button variant="outline" size="sm" className="mt-6" data-testid="button-upload-pcap">
                     Upload PCAP File
                   </Button>
                 </Link>
@@ -119,9 +122,10 @@ export default function Dashboard() {
                 {recentCorrelations.slice(0, 5).map((correlation) => (
                   <div 
                     key={correlation.id}
-                    className="flex items-center justify-between p-4 rounded-md border hover-elevate"
+                    className="flex items-center justify-between p-4 rounded-md border-2 border-primary/30 hover-elevate bg-card/50 backdrop-blur-sm transition-all duration-300 hover:border-primary/60 hover:shadow-lg hover:shadow-primary/20 relative overflow-hidden group"
                     data-testid={`correlation-${correlation.id}`}
                   >
+                    <div className="absolute inset-0 holographic opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-mono text-foreground">
