@@ -46,7 +46,7 @@ export default function App() {
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
                   <div className="hidden md:block">
                     <h2 className="text-sm font-medium text-foreground">
-                      TN Police Hackathon 2025
+                      TOR Forensic Analysis System
                     </h2>
                   </div>
                 </div>

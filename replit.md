@@ -1,8 +1,8 @@
 # TOR Unveil - Peel the Onion
 
-**TN Police Hackathon 2025 - Forensic Analysis System**
+**Forensic Analysis System**
 
-A comprehensive TOR network deanonymization and forensic analysis system designed for the Tamil Nadu Police Hackathon 2025. This system helps law enforcement trace TOR network users by correlating traffic patterns and identifying entry/exit nodes.
+A comprehensive TOR network deanonymization and forensic analysis system that helps trace TOR network users by correlating traffic patterns and identifying entry/exit nodes.
 
 ## Project Overview
 
@@ -166,8 +166,7 @@ Server runs on: http://localhost:5000
 
 ## Team
 
-Built for TN Police Hackathon 2025
-Cyber Crime Wing, Chennai
+Cyber Crime Wing
 
 ---
 
