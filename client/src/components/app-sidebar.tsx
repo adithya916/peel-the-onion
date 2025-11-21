@@ -5,8 +5,7 @@ import {
   GitBranch, 
   Home, 
   Network, 
-  FileText, 
-  Shield 
+  FileText
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
@@ -20,6 +19,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
 } from "@/components/ui/sidebar";
+import torIcon from "@/assets/tor-icon.png";
 
 const menuItems = [
   {
@@ -63,7 +63,7 @@ export function AppSidebar() {
         <div className="absolute inset-0 data-grid opacity-20 pointer-events-none" />
         <div className="flex items-center gap-3 relative z-10">
           <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/20 border-2 border-primary cyber-glow backdrop-blur-sm">
-            <Shield className="w-7 h-7 text-primary drop-shadow-[0_0_8px_hsl(var(--primary))]" />
+            <img src={torIcon} alt="TOR Unveil" className="w-8 h-8 drop-shadow-[0_0_8px_hsl(var(--primary))]" />
           </div>
           <div>
             <h2 className="text-lg font-bold font-mono text-primary uppercase tracking-wider">TOR Unveil</h2>
