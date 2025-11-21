@@ -79,6 +79,13 @@ export default function Reports() {
         description: "Report has been downloaded as JSON",
       });
     },
+    onError: (error: any) => {
+      toast({
+        title: "Export Failed",
+        description: error?.message || "Failed to export report",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleGenerate = () => {
