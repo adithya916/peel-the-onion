@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { CorrelationNetworkViz } from "@/components/correlation-network-viz";
 
 export default function NodeCorrelation() {
   const { toast } = useToast();
@@ -461,6 +462,11 @@ export default function NodeCorrelation() {
           )}
         </CardContent>
       </Card>
+
+      {/* Network Visualization */}
+      {correlations && correlations.length > 0 && nodes && (
+        <CorrelationNetworkViz correlations={correlations} nodes={nodes} />
+      )}
 
       {/* Correlation Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
