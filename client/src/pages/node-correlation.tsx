@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import { GitBranch, TrendingUp, ArrowRight, Filter } from "lucide-react";
+import { GitBranch, Upload, ArrowRight, Filter, FileUp, CheckCircle2, AlertCircle } from "lucide-react";
 import { Correlation, CorrelationMetrics } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -23,9 +23,17 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function NodeCorrelation() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [confidenceFilter, setConfidenceFilter] = useState<string>("all");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
 
   const { data: correlations, isLoading: correlationsLoading } = useQuery<Correlation[]>({
     queryKey: ["/api/correlations"],
@@ -34,6 +42,68 @@ export default function NodeCorrelation() {
   const { data: metrics, isLoading: metricsLoading } = useQuery<CorrelationMetrics>({
     queryKey: ["/api/correlations/metrics"],
   });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("pcap", file);
+      
+      const response = await fetch("/api/traffic-flows/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload PCAP file");
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/correlations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/correlations/metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/traffic-flows"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      
+      setUploadStatus("success");
+      toast({
+        title: "Analysis Complete",
+        description: `Successfully analyzed ${data.packetCount.toLocaleString()} packets and generated correlations`,
+      });
+      
+      setSelectedFile(null);
+    },
+    onError: (error: Error) => {
+      setUploadStatus("error");
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to analyze PCAP file. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.name.endsWith(".pcap") || file.name.endsWith(".pcapng") || file.name.endsWith(".cap")) {
+        setSelectedFile(file);
+        setUploadStatus("idle");
+      } else {
+        toast({
+          title: "Invalid File Type",
+          description: "Please select a valid PCAP file (.pcap, .pcapng, or .cap)",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleAnalyze = () => {
+    if (selectedFile) {
+      uploadMutation.mutate(selectedFile);
+    }
+  };
 
   const filteredCorrelations = correlations?.filter((c) => 
     confidenceFilter === "all" || c.confidence === confidenceFilter
@@ -44,9 +114,115 @@ export default function NodeCorrelation() {
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Node Correlation</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Statistical analysis of TOR traffic patterns and entry/exit node correlation
+          Upload PCAP files to analyze TOR traffic patterns and identify entry/exit node correlations
         </p>
       </div>
+
+      {/* PCAP Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-medium">PCAP File Analysis</CardTitle>
+          <CardDescription>
+            Upload packet capture files to perform statistical correlation analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="border-2 border-dashed rounded-lg p-8 text-center hover-elevate">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pcap,.pcapng,.cap"
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="input-pcap-file"
+            />
+            
+            {!selectedFile ? (
+              <div className="space-y-4">
+                <FileUp className="w-12 h-12 text-muted-foreground mx-auto" />
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-1">
+                    Drop PCAP file here or click to browse
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Supports .pcap, .pcapng, and .cap formats
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  data-testid="button-browse-file"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Select File
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {uploadStatus === "idle" && (
+                  <CheckCircle2 className="w-12 h-12 text-chart-5 mx-auto" />
+                )}
+                {uploadStatus === "success" && (
+                  <CheckCircle2 className="w-12 h-12 text-chart-5 mx-auto" />
+                )}
+                {uploadStatus === "error" && (
+                  <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
+                )}
+                
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-1">
+                    {selectedFile.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+                
+                <div className="flex gap-2 justify-center">
+                  <Button 
+                    onClick={handleAnalyze}
+                    disabled={uploadMutation.isPending}
+                    data-testid="button-analyze-pcap"
+                  >
+                    {uploadMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <GitBranch className="w-4 h-4 mr-2" />
+                        Analyze
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setUploadStatus("idle");
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    variant="outline"
+                    disabled={uploadMutation.isPending}
+                    data-testid="button-clear-file"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {uploadStatus === "success" && (
+            <Alert data-testid="alert-upload-success">
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                PCAP file analyzed successfully. Correlations have been generated and are displayed below.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-4">
         <Card>
